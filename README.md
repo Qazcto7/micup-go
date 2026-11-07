@@ -5,7 +5,7 @@
 
 **micup-go**, [Micup.gg](https://micup.gg) (Fluxer motoru tabanlı sesli ve metin iletişim platformu) için Go diliyle geliştirilmiş, yasal ve kurallara %100 tam uyumlu bot kütüphanesidir (SDK).
 
-Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer Anything) yaklaşımı ve tersine mühendislik ilkeleri doğrultusunda Micup istemci ve ağ protokolü analiz edilerek hazırlanmıştır.
+Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer Anything) araç seti ve tersine mühendislik ilkeleri doğrultusunda Micup masaüstü (Electron/asar) ve web protokolü analiz edilerek hazırlanmıştır.
 
 ---
 
@@ -29,10 +29,21 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
   - Otomatik Oturum Kurtarma (`RESUME`) ve Yeniden Bağlanma (`Exponential Backoff`)
   - Tüm Gateway OpCode'ları (`DISPATCH`, `HEARTBEAT`, `IDENTIFY`, `RESUME`, `RECONNECT`, `INVALID_SESSION`, `HELLO`, vb.)
   - Tip güvenli olay (event) dinleme mimarisi
-- 💬 **Kapsamlı REST API Desteği:**
-  - **Kullanıcılar:** `@me` profil sorgulama, kullanıcı bilgileri alma, avatar ve kullanıcı adı güncelleme.
-  - **Sunucular (Guilds):** Sunucu detayları, kanallar, üyeler, roller, rol atama/çıkarma, ban ve kick işlemleri.
-  - **Kanallar & Mesajlar:** Mesaj gönderme, yanıtlama, düzenleme, silme, sabitleme (pin), zengin gömülü kartlar (Embeds) ve emojili tepkiler (Reactions).
+- 🎙️ **Ses Durumu ve Bağlantı Yönetimi (`voice.go`):**
+  - Ses kanalına katılma (`ChannelVoiceJoin`) ve ayrılma (`ChannelVoiceLeave`)
+  - `VOICE_STATE_UPDATE` ve `VOICE_SERVER_UPDATE` yönlendirmesi
+  - `VoiceConnection` ile ses kimlik doğrulama belirteçlerinin (token, endpoint) takibi
+- 🎨 **Akıcı Embed Oluşturucu (`embed.go`):**
+  - Zincirleme (Fluent) API: `NewEmbedBuilder().SetTitle(...).SetColor(...).AddField(...).Build()`
+- 🔘 **Etkileşimli UI Bileşenleri (`components.go`):**
+  - Eylem Satırları (`ActionRow`) ve Düğmeler (`Button` - Primary, Secondary, Success, Danger, Link)
+- 🛡️ **Moderasyon & Denetim Kayıtları (`moderation.go`):**
+  - Toplu mesaj silme (`ChannelMessagesBulkDelete` - 100 mesaja kadar tek seferde)
+  - Yazıyor bildirimi (`ChannelTyping`)
+  - Sunucu yasakları (`GuildBans`), üye budama (`GuildPrune`) ve denetim kayıtları (`GuildAuditLogs`)
+- 🧵 **İş Parçacıkları & Forum Kanalları (`thread.go`):**
+  - Metin veya mesajdan iş parçacığı başlatma (`ChannelThreadStart`, `MessageThreadStart`)
+  - Aktif iş parçacıklarını listeleme (`ChannelActiveThreads`, `GuildActiveThreads`)
 - 🛠️ **Gelişmiş Komut Yönlendiricisi (Command Router):**
   - Özelleştirilebilir komut öneki (`!`, `/`, `?` vb.)
   - Otomatik `!help` yardım menüsü
@@ -47,73 +58,14 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
 ## 📦 Kurulum
 
 ```bash
-go get github.com/Qazcto7/micup-go
+go get github.com/Qazcto7/micup-go@v1.1.0
 ```
 
 ---
 
-## 🏁 Hızlı Başlangıç
+## 🏁 Kod Örnekleri
 
-### 1. Basit Ping-Pong Botu
-
-```go
-package main
-
-import (
-	"fmt"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"github.com/Qazcto7/micup-go"
-)
-
-func main() {
-	// Bot token'ınızı girin
-	token := os.Getenv("MICUP_BOT_TOKEN")
-
-	sess, err := micup.New(token)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Bot hazır olduğunda tetiklenir
-	sess.AddHandler(func(s *micup.Session, r *micup.Ready) {
-		log.Printf("Giriş yapıldı: %s#%s", r.User.Username, r.User.Discriminator)
-		_ = s.UpdateStatus("online", &micup.GatewayActivity{
-			Name: "!ping dinliyor",
-			Type: 0,
-		})
-	})
-
-	// Gelen mesajları dinle
-	sess.AddHandler(func(s *micup.Session, m *micup.MessageCreate) {
-		if m.Author.Bot {
-			return // Kendi mesajlarını ve diğer botları yok say
-		}
-
-		if m.Content == "!ping" {
-			_, _ = s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pong! 🏓 Merhaba %s!", m.Author.Username))
-		}
-	})
-
-	// Gateway bağlantısını aç
-	if err := sess.Open(); err != nil {
-		log.Fatal(err)
-	}
-	defer sess.Close()
-
-	log.Println("Bot çalışıyor. Çıkmak için CTRL+C tuşlayın.")
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
-	<-sc
-}
-```
-
----
-
-### 2. Komut Çerçevesi (Command Router) ve Embed Kullanımı
+### 1. EmbedBuilder ve Butonlu Mesaj Örneği
 
 ```go
 package main
@@ -130,25 +82,32 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// '!' önekiyle komut yöneticisi oluştur
 	router := micup.NewCommandRouter("!")
 
-	// !bilgi komutu
 	router.Register(&micup.Command{
-		Name:        "bilgi",
-		Description: "Bot ve sunucu hakkında bilgi verir.",
+		Name:        "panel",
+		Description: "Etkileşimli butonlu kontrol panelini açar.",
 		Handler: func(ctx *micup.CommandContext) error {
-			embed := &micup.Embed{
-				Title:       "Micup Bot Bilgisi",
-				Description: "Bu bot micup-go kütüphanesiyle çalışıyor.",
-				Color:       0x00D1B2,
-				Fields: []*micup.EmbedField{
-					{Name: "Kullanıcı", Value: ctx.Message.Author.Username, Inline: true},
-					{Name: "Kanal ID", Value: ctx.Message.ChannelID, Inline: true},
-				},
-				Footer: &micup.EmbedFooter{Text: "Micup Topluluğu"},
-			}
-			_, err := ctx.ReplyEmbed(embed)
+			// Akıcı EmbedBuilder ile kart hazırla
+			embed := micup.NewEmbedBuilder().
+				SetTitle("🎮 Topluluk Kontrol Paneli").
+				SetDescription("Aşağıdaki butonları kullanarak işlem yapabilirsiniz.").
+				SetColor(0x5865F2).
+				AddField("Sunucu", "Micup Resmi Topluluğu", true).
+				AddField("Durum", "Aktif 🟢", true).
+				SetFooter("Micup Bot", "").
+				Build()
+
+			// Butonları oluştur
+			btnVote := micup.NewSuccessButton("btn_vote", "Oy Ver ⭐")
+			btnWebsite := micup.NewLinkButton("https://micup.gg", "Siteyi Aç 🌐")
+			row := micup.NewActionRow(btnVote, btnWebsite)
+
+			// Gönder
+			_, err := ctx.Session.ChannelMessageSendComplex(ctx.Message.ChannelID, &micup.MessageSend{
+				Embeds:     []*micup.Embed{embed},
+				Components: []micup.Component{row},
+			})
 			return err
 		},
 	})
@@ -166,39 +125,46 @@ func main() {
 
 ---
 
-### 3. MicupList (api.micuplist.me) Oy & İstatistik Entegrasyonu
+### 2. Ses Kanalına Katılma Örneği (`voice.go`)
 
 ```go
-package main
+sess.AddHandler(func(s *micup.Session, m *micup.MessageCreate) {
+    if m.Content == "!katil" {
+        // Ses kanalına katıl (guildID, channelID, selfMute, selfDeaf)
+        vc, err := s.ChannelVoiceJoin(context.Background(), m.GuildID, "kanal-id-123", false, false)
+        if err != nil {
+            log.Printf("Ses kanalına bağlanılamadı: %v", err)
+            return
+        }
+        log.Printf("Ses oturumu başlatıldı: Guild %s, Channel %s", vc.GuildID, vc.ChannelID)
+    }
 
-import (
-	"context"
-	"log"
-	"net/http"
-	"os"
+    if m.Content == "!ayril" {
+        _ = s.ChannelVoiceLeave(m.GuildID)
+    }
+})
+```
 
-	"github.com/Qazcto7/micup-go"
-)
+---
 
-func main() {
-	sess, _ := micup.New(os.Getenv("MICUP_BOT_TOKEN"))
-	listClient := micup.NewMicupListClient(os.Getenv("MICUPLIST_API_TOKEN"))
+### 3. Toplu Mesaj Temizleme (Moderasyon)
 
-	// Bot açılınca sunucu sayısını MicupList'e bildir
-	sess.AddHandler(func(s *micup.Session, r *micup.Ready) {
-		_ = listClient.PostStats(context.Background(), r.User.ID, len(r.Guilds))
-	})
-
-	// Oy veren kullanıcıları karşılayan webhook
-	http.HandleFunc("/webhook/vote", micup.NewVoteWebhookHandler(os.Getenv("WEBHOOK_SECRET"), func(p *micup.VoteWebhookPayload) {
-		log.Printf("Kullanıcı %s bota oy verdi!", p.UserID)
-	}))
-	go http.ListenAndServe(":8080", nil)
-
-	_ = sess.Open()
-	defer sess.Close()
-	select {}
-}
+```go
+router.Register(&micup.Command{
+    Name: "sil",
+    Description: "Kanaldaki son mesajları topluca siler.",
+    Handler: func(ctx *micup.CommandContext) error {
+        messages, err := ctx.Session.REST().ChannelMessages(context.Background(), ctx.Message.ChannelID, 50, "", "", "")
+        if err != nil {
+            return err
+        }
+        var ids []string
+        for _, msg := range messages {
+            ids = append(ids, msg.ID)
+        }
+        return ctx.Session.ChannelMessagesBulkDelete(ctx.Message.ChannelID, ids)
+    },
+})
 ```
 
 ---
@@ -213,8 +179,11 @@ func main() {
 | **OpCode 0** | `DISPATCH` | READY, MESSAGE_CREATE, GUILD_CREATE vb. olaylar |
 | **OpCode 1 / 11** | `HEARTBEAT` / `HEARTBEAT_ACK` | Çift yönlü canlı tutma sinyali |
 | **OpCode 2** | `IDENTIFY` | Oturum açma paketi (`token`, `properties`, `presence`) |
+| **OpCode 3** | `PRESENCE_UPDATE` | Durum ve aktivite güncelleme |
+| **OpCode 4** | `VOICE_STATE_UPDATE` | Ses kanalına katılma ve ayrılma |
 | **OpCode 6** | `RESUME` | Kesinti sonrası oturum kurtarma paketi |
 | **OpCode 10** | `HELLO` | `heartbeat_interval` bilgisi |
+| **Voice Engine V2** | `@fluxer/voice_engine_v2` | Ses sunucusu ve LiveKit oturum el sıkışması |
 
 ---
 

@@ -174,3 +174,66 @@ func TestPayloadSerialization(t *testing.T) {
 		t.Errorf("expected type %s, got %s", EventMessageCreate, parsed.T)
 	}
 }
+
+func TestEmbedBuilder(t *testing.T) {
+	embed := NewEmbedBuilder().
+		SetTitle("Test Title").
+		SetDescription("Test Desc").
+		SetColor(0xFF5500).
+		AddField("Field 1", "Value 1", true).
+		SetFooter("Footer", "http://icon.png").
+		Build()
+
+	if embed.Title != "Test Title" {
+		t.Errorf("expected Title 'Test Title', got '%s'", embed.Title)
+	}
+	if embed.Color != 0xFF5500 {
+		t.Errorf("expected Color 0xFF5500, got %d", embed.Color)
+	}
+	if len(embed.Fields) != 1 || embed.Fields[0].Name != "Field 1" {
+		t.Errorf("expected 1 field named 'Field 1'")
+	}
+}
+
+func TestComponentSerialization(t *testing.T) {
+	btn := NewPrimaryButton("btn_click", "Click Me")
+	row := NewActionRow(btn)
+
+	data, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("failed to marshal ActionRow: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to unmarshal ActionRow json: %v", err)
+	}
+
+	if raw["type"] != float64(ComponentTypeActionRow) {
+		t.Errorf("expected type 1, got %v", raw["type"])
+	}
+}
+
+func TestVoiceStatePayload(t *testing.T) {
+	chID := "ch123"
+	payload := VoiceStateUpdatePayload{
+		GuildID:   "g123",
+		ChannelID: &chID,
+		SelfMute:  true,
+		SelfDeaf:  false,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal voice state payload: %v", err)
+	}
+
+	var parsed VoiceStateUpdatePayload
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal voice state payload: %v", err)
+	}
+
+	if *parsed.ChannelID != "ch123" || !parsed.SelfMute {
+		t.Errorf("unexpected parsed voice payload: %+v", parsed)
+	}
+}
