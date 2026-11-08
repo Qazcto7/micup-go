@@ -111,6 +111,10 @@ type VoiceServerUpdate struct {
 	Endpoint string `json:"endpoint"`
 }
 
+type InteractionCreate struct {
+	*Interaction
+}
+
 // EventHandlerRegistry handles registration and dispatch of event callbacks.
 type EventHandlerRegistry struct {
 	mu       sync.RWMutex
@@ -313,6 +317,13 @@ func parseDispatchEvent(eventName string, raw []byte) (interface{}, error) {
 			return nil, err
 		}
 		return &vServer, nil
+
+	case EventInteractionCreate:
+		var inter Interaction
+		if err := json.Unmarshal(raw, &inter); err != nil {
+			return nil, err
+		}
+		return &InteractionCreate{Interaction: &inter}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown dispatch event type: %s", eventName)

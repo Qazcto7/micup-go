@@ -24,6 +24,8 @@ type SessionOptions struct {
 	TokenPrefix string
 	UserAgent   string
 	HTTPClient  *http.Client
+	ShardID     int
+	ShardCount  int
 }
 
 // Option modifies SessionOptions.
@@ -89,6 +91,11 @@ func New(token string, opts ...Option) (*Session, error) {
 
 	s.gateway = NewGatewayClient(s, token)
 	return s, nil
+}
+
+// Options returns the configured session options.
+func (s *Session) Options() *SessionOptions {
+	return s.options
 }
 
 // REST returns the low-level REST client.

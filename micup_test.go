@@ -237,3 +237,58 @@ func TestVoiceStatePayload(t *testing.T) {
 		t.Errorf("unexpected parsed voice payload: %+v", parsed)
 	}
 }
+
+func TestInteractionSerialization(t *testing.T) {
+	cmd := &ApplicationCommand{
+		Name:        "ping",
+		Description: "A slash command",
+		Type:        ChatInputCommandType,
+		Options: []*ApplicationCommandOption{
+			{
+				Type:        OptionTypeString,
+				Name:        "message",
+				Description: "Text to send",
+				Required:    true,
+			},
+		},
+	}
+
+	data, err := json.Marshal(cmd)
+	if err != nil {
+		t.Fatalf("failed to marshal application command: %v", err)
+	}
+
+	var parsed ApplicationCommand
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal application command: %v", err)
+	}
+
+	if parsed.Name != "ping" || len(parsed.Options) != 1 {
+		t.Errorf("unexpected command structure: %+v", parsed)
+	}
+}
+
+func TestShardingManager(t *testing.T) {
+	mgr, err := NewShardingManager("test-token", 2)
+	if err != nil {
+		t.Fatalf("failed to create sharding manager: %v", err)
+	}
+
+	if len(mgr.Sessions) != 2 {
+		t.Errorf("expected 2 shard sessions, got %d", len(mgr.Sessions))
+	}
+	if mgr.Sessions[0].options.ShardID != 0 || mgr.Sessions[1].options.ShardID != 1 {
+		t.Errorf("shard IDs incorrect: %d, %d", mgr.Sessions[0].options.ShardID, mgr.Sessions[1].options.ShardID)
+	}
+}
+
+func TestAudioStreamer(t *testing.T) {
+	streamer := NewAudioStreamer(nil)
+	defer streamer.Close()
+
+	frame := []byte{0xF8, 0xFF, 0xFE}
+	err := streamer.SendOpusFrame(frame)
+	if err != nil {
+		t.Errorf("expected frame to send, got: %v", err)
+	}
+}

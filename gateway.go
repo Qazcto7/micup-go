@@ -267,6 +267,10 @@ func (g *GatewayClient) sendIdentify() {
 		},
 	}
 
+	if g.session.options != nil && g.session.options.ShardCount > 1 {
+		identify.Shard = []int{g.session.options.ShardID, g.session.options.ShardCount}
+	}
+
 	data, _ := json.Marshal(identify)
 	_ = g.SendPayload(&GatewayPayload{
 		Op: OpIdentify,

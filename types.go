@@ -334,6 +334,7 @@ type GatewayIdentify struct {
 	Presence       *GatewayPresence           `json:"presence,omitempty"`
 	Flags          int                         `json:"flags,omitempty"`
 	InitialGuildID string                      `json:"initial_guild_id,omitempty"`
+	Shard          []int                       `json:"shard,omitempty"`
 }
 
 // GatewayIdentifyProperties standard client metadata.
