@@ -811,4 +811,77 @@ func TestVideoTrackAndStreamer(t *testing.T) {
 	}
 }
 
+func TestTicketManagerPanelAndConfig(t *testing.T) {
+	mgr := NewTicketManager(nil, &TicketConfig{
+		GuildID: "guild_123",
+	})
+
+	if mgr.config.ChannelPrefix != "ticket-" || mgr.config.OpenButtonID != "ticket_open" || mgr.config.CloseButtonID != "ticket_close" {
+		t.Errorf("unexpected ticket defaults: %+v", mgr.config)
+	}
+
+	embed, row := mgr.CreatePanelMessage("Yardım Paneli", "Tıkla", "Aç")
+	if embed == nil || row == nil {
+		t.Fatalf("expected non-nil embed and action row")
+	}
+
+	if len(row.Components) != 1 {
+		t.Fatalf("expected 1 button in action row")
+	}
+
+	btn, ok := row.Components[0].(*Button)
+	if !ok || btn.CustomID != "ticket_open" {
+		t.Errorf("expected button with ticket_open, got %+v", row.Components[0])
+	}
+
+	if mgr.ActiveTickets() != 0 {
+		t.Errorf("expected 0 active tickets")
+	}
+}
+
+func TestDashboardInitializationAndEndpoints(t *testing.T) {
+	session := &Session{
+		State:   NewState(),
+		events:  NewEventHandlerRegistry(),
+		options: &SessionOptions{},
+	}
+	session.State.User = &User{ID: "bot_123", Username: "TestDashboardBot"}
+
+	dash := NewDashboard(session, &DashboardOptions{
+		Host:  "127.0.0.1",
+		Port:  19876,
+		Title: "Test Dashboard",
+	})
+
+	dash.AddLog("TEST", "Dashboard unit test starting")
+
+	if err := dash.Start(); err != nil {
+		t.Fatalf("failed to start dashboard: %v", err)
+	}
+	defer func() {
+		_ = dash.Stop()
+	}()
+
+	// Query /api/stats
+	resp, err := http.Get("http://127.0.0.1:19876/api/stats")
+	if err != nil {
+		t.Fatalf("failed to query dashboard stats: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 OK, got %d", resp.StatusCode)
+	}
+
+	var stats map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatalf("failed to parse dashboard stats JSON: %v", err)
+	}
+
+	if stats["title"] != "Test Dashboard" {
+		t.Errorf("expected title 'Test Dashboard', got %v", stats["title"])
+	}
+}
+
+
 

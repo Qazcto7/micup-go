@@ -24,6 +24,14 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
 
 ## 🚀 Kapsamlı Özellikler
 
+- 🎫 **Butonlu Destek & Ticket Sistemi (`ticket.go`):**
+  - Butonlu etkileşim paneli (`CreatePanelMessage`).
+  - Kullanıcıya ve yetkili rollerine özel izole destek kanalı açma (`PermissionOverwrite`).
+  - Kapatma butonu, loglama kanalı ve otomatik kanal silme (`TicketManager`).
+- 🌐 **Dahili Web Yönetim Paneli (Dashboard - `dashboard.go`):**
+  - Tek satırla ayağa kalkan web arayüzü (`s.StartDashboard(&DashboardOptions{Port: 8080})`).
+  - Gerçek zamanlı sunucu, üye, kanal istatistikleri ve uptime takibi.
+  - Canlı Gateway olay akışı logları ve tarayıcıdan kanallara hızlı mesaj gönderme formu.
 - 🧠 **Hafıza-içi State Önbelleği (`state.go`):**
   - Sunucular (`Guilds`), Kanallar (`Channels`), Üyeler (`Members`), Roller (`Roles`) ve mesaj geçmişi otomatik olarak RAM'de güncel tutulur.
   - Gereksiz REST API isteklerini önler; `s.State.Guild(id)`, `s.State.Channel(id)` ile mikrosaniyeler içinde erişim sağlar.
@@ -85,7 +93,7 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
 ## 📦 Kurulum
 
 ```bash
-go get github.com/Qazcto7/micup-go@v1.5.0
+go get github.com/Qazcto7/micup-go@v1.6.0
 ```
 
 ---

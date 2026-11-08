@@ -176,3 +176,13 @@ func (s *Session) GuildMemberBan(guildID, userID string, deleteMessageDays int, 
 func (s *Session) GuildMemberUnban(guildID, userID string) error {
 	return s.rest.GuildMemberUnban(context.Background(), guildID, userID)
 }
+
+// GuildChannelCreate creates a channel in a guild.
+func (s *Session) GuildChannelCreate(guildID string, params *ChannelParams) (*Channel, error) {
+	return s.rest.CreateGuildChannel(context.Background(), guildID, params)
+}
+
+// ChannelDelete deletes a channel.
+func (s *Session) ChannelDelete(channelID string) error {
+	return s.rest.DeleteChannel(context.Background(), channelID)
+}
