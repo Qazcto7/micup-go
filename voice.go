@@ -41,8 +41,11 @@ type VoiceTrack struct {
 	Source              string `json:"source"`              // "microphone", "screen", "screenAudio", "camera"
 	Codec               string `json:"codec"`               // "opus", "h264", "vp8", "vp9"
 	BitrateKbps         int    `json:"bitrate_kbps"`        // 48, 128, etc.
-	SampleRate          int    `json:"sample_rate"`         // 48000
-	Channels            int    `json:"channels"`            // 1 (mono), 2 (stereo)
+	SampleRate          int    `json:"sample_rate,omitempty"`         // 48000
+	Channels            int    `json:"channels,omitempty"`            // 1 (mono), 2 (stereo)
+	Width               int    `json:"width,omitempty"`               // 1280, 1920, etc.
+	Height              int    `json:"height,omitempty"`              // 720, 1080, etc.
+	FPS                 int    `json:"fps,omitempty"`                 // 30, 60
 	Muted               bool   `json:"muted"`
 }
 
@@ -80,6 +83,7 @@ type VoiceConnection struct {
 	Endpoint     string
 	Ready        chan struct{}
 	Streamer     *AudioStreamer
+	VideoStreamer *VideoStreamer
 	Participants map[string]*VoiceParticipant // userID -> VoiceParticipant
 
 	// Callbacks
@@ -235,6 +239,70 @@ func (vc *VoiceConnection) PublishAudioTrack(source string, sampleRate, channels
 	vc.mu.Unlock()
 
 	return track, nil
+}
+
+// PublishVideoTrack registers and prepares a video/screen track for streaming.
+func (vc *VoiceConnection) PublishVideoTrack(source string, codec string, width, height, fps, bitrateKbps int) (*VoiceTrack, error) {
+	if width <= 0 {
+		width = 1280
+	}
+	if height <= 0 {
+		height = 720
+	}
+	if fps <= 0 {
+		fps = 30
+	}
+	if bitrateKbps <= 0 {
+		bitrateKbps = 3000
+	}
+	if codec == "" {
+		codec = CodecH264
+	}
+	if source == "" {
+		source = TrackSourceCamera
+	}
+
+	track := &VoiceTrack{
+		SID:                 fmt.Sprintf("track-video-%d", time.Now().UnixNano()),
+		ParticipantIdentity: vc.UserID,
+		Kind:                TrackKindVideo,
+		Source:              source,
+		Codec:               codec,
+		BitrateKbps:         bitrateKbps,
+		Width:               width,
+		Height:              height,
+		FPS:                 fps,
+	}
+
+	vc.mu.Lock()
+	if vc.VideoStreamer == nil {
+		vc.VideoStreamer = NewVideoStreamer(vc, width, height, fps, bitrateKbps)
+	}
+	if vc.onTrackPublished != nil {
+		vc.onTrackPublished(track)
+	}
+	vc.mu.Unlock()
+
+	return track, nil
+}
+
+// SendVideoFrame queues an encoded video packet (H.264 NAL or VP8 frame) to the room.
+func (vc *VoiceConnection) SendVideoFrame(frame []byte) error {
+	vc.mu.RLock()
+	defer vc.mu.RUnlock()
+
+	if vc.VideoStreamer == nil {
+		return errors.New("video streamer not initialized")
+	}
+	return vc.VideoStreamer.SendVideoFrame(frame)
+}
+
+// NewVideoStreamer creates an active video streamer for the connection.
+func (vc *VoiceConnection) NewVideoStreamer(width, height, fps, bitrateKbps int) *VideoStreamer {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+	vc.VideoStreamer = NewVideoStreamer(vc, width, height, fps, bitrateKbps)
+	return vc.VideoStreamer
 }
 
 // SetSpeaking updates the local bot speaking indicator.

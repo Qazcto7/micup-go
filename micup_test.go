@@ -720,3 +720,95 @@ func TestAudioPlayerVolumeScaling(t *testing.T) {
 	}
 }
 
+func TestHardwareEncoderProbe(t *testing.T) {
+	cap := ProbeHardwareEncoders()
+	if cap == nil {
+		t.Fatalf("expected non-nil hardware encoder capability")
+	}
+	if len(cap.SupportedCodecs) == 0 {
+		t.Errorf("expected at least one supported codec")
+	}
+	if cap.PreferredCodec == "" {
+		t.Errorf("expected non-empty preferred codec")
+	}
+}
+
+func TestGameActivityValidationAndPayload(t *testing.T) {
+	// 1. Game ID validation
+	if !ValidateGameID("counter-strike-2") || !ValidateGameID("valorant") {
+		t.Errorf("expected valid game IDs to pass")
+	}
+	if ValidateGameID("Invalid_Caps") || ValidateGameID("-dash-start") || ValidateGameID("toolongggggggggggggggggggggggggggggggggggggggggggggg") {
+		t.Errorf("expected invalid game IDs to fail")
+	}
+
+	// 2. Manual Name validation
+	if !ValidateManualName("Minecraft 1.20") || !ValidateManualName("Custom Game") {
+		t.Errorf("expected valid manual names to pass")
+	}
+	if ValidateManualName("") || ValidateManualName("   ") || ValidateManualName("Bad\x00Control") {
+		t.Errorf("expected invalid manual names to fail")
+	}
+
+	// 3. Executable validation
+	if !ValidateExecutable("cs2.exe") || !ValidateExecutable("game.exe") {
+		t.Errorf("expected valid exe to pass")
+	}
+	if ValidateExecutable("javaw.exe") || ValidateExecutable("steam.exe") || ValidateExecutable("game.sh") || ValidateExecutable("../path/game.exe") {
+		t.Errorf("expected blacklisted or invalid exe to fail")
+	}
+
+	// 4. Payload generation & serialization
+	now := time.Now()
+	payload, err := NewGameActivityPayload("valorant", "", now)
+	if err != nil {
+		t.Fatalf("unexpected error creating game activity payload: %v", err)
+	}
+
+	if payload.State != GameActivityStatePlaying || payload.Activity.GameID != "valorant" {
+		t.Errorf("unexpected game activity state or game_id: %+v", payload)
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal game activity payload: %v", err)
+	}
+
+	var parsed GameActivityPayload
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal game activity payload: %v", err)
+	}
+	if parsed.Activity.StartedAt != now.UnixMilli() {
+		t.Errorf("expected started_at %d, got %d", now.UnixMilli(), parsed.Activity.StartedAt)
+	}
+}
+
+func TestVideoTrackAndStreamer(t *testing.T) {
+	vc := &VoiceConnection{
+		UserID:   "bot_1",
+		Streamer: NewAudioStreamer(nil),
+	}
+
+	// Publish video track
+	track, err := vc.PublishVideoTrack(TrackSourceCamera, CodecH264, 1920, 1080, 60, 4500)
+	if err != nil {
+		t.Fatalf("failed to publish video track: %v", err)
+	}
+
+	if track.Kind != TrackKindVideo || track.Codec != CodecH264 || track.Width != 1920 || track.Height != 1080 || track.FPS != 60 {
+		t.Errorf("unexpected video track properties: %+v", track)
+	}
+
+	// Queue frame
+	frameData := []byte{0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x0a}
+	if err := vc.SendVideoFrame(frameData); err != nil {
+		t.Errorf("failed to send video frame: %v", err)
+	}
+
+	// Close video streamer
+	if err := vc.VideoStreamer.Close(); err != nil {
+		t.Errorf("failed to close video streamer: %v", err)
+	}
+}
+
+

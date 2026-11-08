@@ -34,6 +34,13 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
   - LiveKit WebRTC ses kanallarına bağlanma (`VoiceJoin`).
   - FFmpeg ile her türlü ses dosyasını veya canlı yayını anında 48kHz Stereo 20ms PCM paketlerine dönüştürüp akıtma.
   - Gerçek zamanlı ses düzeyi ayarlama (`SetVolume`), duraklatma (`Pause`), devam ettirme (`Resume`) ve durdurma (`Stop`).
+- 📹 **Canlı Video & Ekran Yayını Motoru (`video_stream.go` & `voice.go`):**
+  - Ses odalarında kamera (`camera`) veya ekran paylaşımı (`screen`) video kanalları açma (`PublishVideoTrack`).
+  - FFmpeg ile Annex-B H.264 NAL birimlerini 30/60 FPS zamanlayıcıyla canlı yayınlama (`VideoStreamer`, `SendVideoFrame`).
+- ⚡ **Donanım Video Kodlayıcı Tespiti (`encoder_probe.go`):**
+  - NVIDIA NVENC, Intel/AMD VA-API ve FFmpeg donanım video kodlayıcılarını dinamik sorgulama (`ProbeHardwareEncoders`).
+- 🎮 **Oyun Aktivitesi & Süreç Tanıma Protokolü (`game_activity.go`):**
+  - Micup istemcisinin (`MainApp.js` & `preload`) kullandığı `game_id`, `manual_name` ve `started_at` standartlarına %100 uyumlu oyun durumu yayınlama (`s.UpdatePlayingGame`).
 - 🛡️ **Otomatik Moderasyon Motoru (`automod.go`):**
   - Platform REST AutoMod kuralları yönetimi.
   - Gerçek zamanlı bot içi AutoMod middleware'i (`AutoModEngine`): Regex kalıpları, yasaklı kelimeler ve mention spam koruması.
@@ -78,7 +85,7 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
 ## 📦 Kurulum
 
 ```bash
-go get github.com/Qazcto7/micup-go@v1.4.0
+go get github.com/Qazcto7/micup-go@v1.5.0
 ```
 
 ---
