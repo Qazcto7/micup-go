@@ -239,6 +239,39 @@ func TestVoiceStatePayload(t *testing.T) {
 	}
 }
 
+func TestVoiceTracksAndParticipants(t *testing.T) {
+	vc := &VoiceConnection{
+		GuildID:      "g1",
+		ChannelID:    "c1",
+		RoomName:     "g1/c1",
+		UserID:       "u1",
+		Streamer:     NewAudioStreamer(nil),
+		Participants: make(map[string]*VoiceParticipant),
+	}
+	defer vc.Streamer.Close()
+
+	if vc.RoomName != "g1/c1" {
+		t.Errorf("expected room name g1/c1, got %s", vc.RoomName)
+	}
+
+	track, err := vc.PublishAudioTrack(TrackSourceMicrophone, 48000, 2, 48)
+	if err != nil {
+		t.Fatalf("failed to publish audio track: %v", err)
+	}
+	if track.Codec != CodecOpus || track.BitrateKbps != 48 || track.Channels != 2 {
+		t.Errorf("unexpected track properties: %+v", track)
+	}
+
+	var speakingState bool
+	vc.OnSpeaking(func(userID string, speaking bool) {
+		speakingState = speaking
+	})
+	_ = vc.SetSpeaking(true)
+	if !speakingState {
+		t.Errorf("expected speaking state to be true")
+	}
+}
+
 func TestInteractionSerialization(t *testing.T) {
 	cmd := &ApplicationCommand{
 		Name:        "ping",
