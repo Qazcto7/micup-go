@@ -123,6 +123,11 @@ func (v *VoiceManager) Remove(guildID string) {
 	delete(v.connections, guildID)
 }
 
+// VoiceJoin is a convenience helper to join a voice channel with default context.
+func (s *Session) VoiceJoin(guildID, channelID string, mute, deaf bool) (*VoiceConnection, error) {
+	return s.ChannelVoiceJoin(context.Background(), guildID, channelID, mute, deaf)
+}
+
 // ChannelVoiceJoin instructs the gateway to join a voice channel in a guild.
 func (s *Session) ChannelVoiceJoin(ctx context.Context, guildID, channelID string, mute, deaf bool) (*VoiceConnection, error) {
 	vc := &VoiceConnection{

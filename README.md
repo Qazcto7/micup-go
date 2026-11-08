@@ -6,7 +6,7 @@
 
 **micup-go**, [Micup.gg](https://micup.gg) (Fluxer motoru tabanlı sesli ve metin iletişim platformu) için Go diliyle geliştirilmiş, yasal ve kurallara %100 tam uyumlu, kurumsal seviyede bot SDK'sıdır.
 
-Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer Anything) araç seti ve tersine mühendislik ilkeleri doğrultusunda Micup istemci çekirdeği (`app.asar`) analiz edilerek hazırlanmıştır.
+Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer Anything) ve [Ghidra](https://ghidra-sre.org/) tersine mühendislik araçlarıyla Micup istemci çekirdeği (`app.asar`), ses modülleri (`linux-audio-capture`, `hardware-encoder`) ve protokol katmanı analiz edilerek hazırlanmıştır.
 
 ---
 
@@ -27,17 +27,33 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
 - 🧠 **Hafıza-içi State Önbelleği (`state.go`):**
   - Sunucular (`Guilds`), Kanallar (`Channels`), Üyeler (`Members`), Roller (`Roles`) ve mesaj geçmişi otomatik olarak RAM'de güncel tutulur.
   - Gereksiz REST API isteklerini önler; `s.State.Guild(id)`, `s.State.Channel(id)` ile mikrosaniyeler içinde erişim sağlar.
+- 👑 **Bitwise İzin & Yetki Hesaplayıcı (`permissions.go`):**
+  - 64-bit izin bitmask sabitleri (`PermissionAdministrator`, `PermissionManageGuild`, `PermissionSendMessages`, vb.).
+  - `@everyone`, üye rolleri ve kanal bazlı `PermissionOverwrite` (Allow/Deny) izin ezmelerini çözen `ComputeMemberPermissions` motoru.
+- 🎵 **FFmpeg Opus Ses Yayıncısı & Çalar (`audio_player.go` & `voice.go`):**
+  - LiveKit WebRTC ses kanallarına bağlanma (`VoiceJoin`).
+  - FFmpeg ile her türlü ses dosyasını veya canlı yayını anında 48kHz Stereo 20ms PCM paketlerine dönüştürüp akıtma.
+  - Gerçek zamanlı ses düzeyi ayarlama (`SetVolume`), duraklatma (`Pause`), devam ettirme (`Resume`) ve durdurma (`Stop`).
+- 🛡️ **Otomatik Moderasyon Motoru (`automod.go`):**
+  - Platform REST AutoMod kuralları yönetimi.
+  - Gerçek zamanlı bot içi AutoMod middleware'i (`AutoModEngine`): Regex kalıpları, yasaklı kelimeler ve mention spam koruması.
+- 📋 **Denetim Kayıtları API'si (`audit_log.go`):**
+  - Sunucudaki ban, kick, rol, kanal silme/oluşturma gibi tüm yönetici eylemlerini listeleme ve filtreleme (`GuildAuditLogs`).
+- 😀 **Özel Emoji & Mesaj Reaksiyonları (`emoji.go`):**
+  - Base64 ile sunucuya özel emoji yükleme, düzenleme ve silme.
+  - Mesajlara reaksiyon ekleme (`MessageReactionAdd`), silme ve reaksiyon veren kullanıcıları listeleme.
+- 📅 **Planlanmış Sunucu Etkinlikleri (`scheduled_event.go`):**
+  - Sesli, sahne ve harici etkinlik oluşturma (`GuildScheduledEventCreate`), güncelleme ve katılımcı takibi.
 - 🌐 **Otomatik Dinamik Keşif (`discovery.go`):** Canlı Gateway ve REST API adreslerini `/.well-known/fluxer` üzerinden otomatik tespit eder.
 - ⚡ **WebSocket Gateway v1 (`gateway.go`):**
-  - Kalp Atışı (Heartbeat) & Gecikme (Jitter) yönetimi
-  - Otomatik Oturum Kurtarma (`RESUME`) ve Yeniden Bağlanma (`Exponential Backoff`)
-  - Tüm Gateway OpCode'ları (`DISPATCH`, `HEARTBEAT`, `IDENTIFY`, `RESUME`, `RECONNECT`, `INVALID_SESSION`, `HELLO`, vb.)
+  - Kalp Atışı (Heartbeat) & Gecikme (Jitter) yönetimi.
+  - Otomatik Oturum Kurtarma (`RESUME`) ve Yeniden Bağlanma (`Exponential Backoff`).
   - Thread-safe (goroutine yarışsız) tip güvenli olay dinleme mimarisi.
 - 🗂️ **Gateway Sharding (`sharding.go`):** Büyük ölçekli botlar için birden fazla shard'ı koordine eden `ShardingManager`.
 - 📁 **Dosya & Medya Yükleme (`file.go`):** `multipart/form-data` ile resim, video ve belge gönderme (`ChannelMessageSendFile`, `ChannelMessageSendFiles`).
 - ⚡ **Slash Commands & Interactions (`interaction.go`):**
-  - Global ve sunucuya özel Application Command kaydı (`CreateGlobalApplicationCommand`)
-  - `INTERACTION_CREATE` yakalama ve yanıt gönderme (`InteractionRespond`, `RespondText`)
+  - Global ve sunucuya özel Application Command kaydı (`CreateGlobalApplicationCommand`).
+  - `INTERACTION_CREATE` yakalama ve yanıt gönderme (`InteractionRespond`, `RespondText`).
 - 🔘 **Etkileşimli UI Bileşenleri & Yönlendirici (`components.go` & `collector.go`):**
   - `ComponentRouter` ile `custom_id` bazlı buton/menü tıklama yönlendirmesi.
   - Eylem Satırları (`ActionRow`) ve Düğmeler (`Button` - Primary, Secondary, Success, Danger, Link).
@@ -48,39 +64,28 @@ Bu kütüphane, [morluto/rea](https://github.com/morluto/rea) (Reverse Engineer 
   - Webhook oluşturma, düzenleme, silme ve mesaj gönderme (`WebhookExecute`).
 - 📖 **Otomatik Sayfalayıcı & İteratörler (`paginator.go`):**
   - Sayfalar dolusu mesajı veya üyeyi otomatik sayfalandırarak çeken `MessageIterator` ve `MemberIterator`.
-- 🎙️ **Ses Durumu ve Canlı Yayın (`voice.go` & `voice_stream.go`):**
-  - Ses kanalına katılma (`ChannelVoiceJoin`) ve ayrılma (`ChannelVoiceLeave`)
-  - Canlı Opus ses akışı (`AudioStreamer`, `SendOpusFrame`, `StreamOpusReader`)
 - 🎨 **Akıcı Embed Oluşturucu (`embed.go`):**
-  - Zincirleme (Fluent) API: `NewEmbed().SetTitle(...).SetColor(...).AddField(...).Build()`
-- 🛡️ **Moderasyon & Denetim Kayıtları (`moderation.go`):**
-  - Toplu mesaj silme (`ChannelMessagesBulkDelete` - 100 mesaja kadar tek seferde)
-  - Yazıyor bildirimi (`ChannelTyping`)
-  - Sunucu yasakları (`GuildBans`), üye budama (`GuildPrune`) ve denetim kayıtları (`GuildAuditLogs`)
+  - Zincirleme (Fluent) API: `NewEmbed().SetTitle(...).SetColor(...).AddField(...).Build()`.
 - 🧵 **İş Parçacıkları & Forum Kanalları (`thread.go`):**
-  - Metin veya mesajdan iş parçacığı başlatma (`ChannelThreadStart`, `MessageThreadStart`)
-  - Aktif iş parçacıklarını listeleme (`ChannelActiveThreads`, `GuildActiveThreads`)
+  - Metin veya mesajdan iş parçacığı başlatma (`ChannelThreadStart`, `MessageThreadStart`).
 - 🛠️ **Gelişmiş Komut Yönlendiricisi (`command.go`):**
-  - Özelleştirilebilir komut öneki (`!`, `/`, `?` vb.)
-  - Otomatik `!help` yardım menüsü
+  - Özelleştirilebilir komut öneki (`!`, `/`, `?` vb.) ve otomatik `!help` yardım menüsü.
 - 🌟 **MicupList (api.micuplist.me) Entegrasyonu (`micuplist.go`):**
-  - Bot sunucu sayısı istatistiğini otomatik gönderme
-  - Kullanıcı oy (vote) kontrolü (`CheckUserVote`)
-  - Canlı oy webhook dinleyicisi (`NewVoteWebhookHandler`)
+  - Bot sunucu sayısı istatistiğini otomatik gönderme ve canlı oy webhook dinleyicisi.
 
 ---
 
 ## 📦 Kurulum
 
 ```bash
-go get github.com/Qazcto7/micup-go@v1.3.0
+go get github.com/Qazcto7/micup-go@v1.4.0
 ```
 
 ---
 
 ## 🏁 Kod Örnekleri
 
-### 1. Etkileşimli Butonlar ve Component Router
+### 1. Canlı Ses Kanalında Müzik/Ses Oynatma (`AudioPlayer`)
 
 ```go
 package main
@@ -92,19 +97,15 @@ import (
 func main() {
     client, _ := micup.New("TOKEN")
 
-    compRouter := micup.NewComponentRouter()
-    compRouter.Handle("btn_approve", func(s *micup.Session, i *micup.Interaction) {
-        _ = s.RespondText(i, "✅ Onaylandı!")
-    })
-    client.AddHandler(compRouter.Listener())
-
     client.AddHandler(func(s *micup.Session, m *micup.MessageCreate) {
-        if m.Content == "!onay" {
-            btn := micup.NewSuccessButton("btn_approve", "Onayla").WithEmoji("✅")
-            _, _ = s.ChannelMessageSendComplex(m.ChannelID, &micup.MessageSend{
-                Content:    "İşlemi onaylıyor musunuz?",
-                Components: []micup.Component{micup.NewActionRow(btn)},
-            })
+        if m.Content == "!çal" {
+            // Ses kanalına bağlan
+            vc, _ := s.VoiceJoin(m.GuildID, "KANAL_ID", false, false)
+            
+            // FFmpeg ses oynatıcısı başlat
+            player := vc.NewPlayer()
+            player.SetVolume(0.8) // %80 ses
+            _ = player.Play("muzik.mp3") // veya doğrudan URL
         }
     })
 
@@ -114,26 +115,43 @@ func main() {
 }
 ```
 
-### 2. State Önbelleğinden Hızlı Veri Okuma
+### 2. Otomatik Moderasyon & Filtreleme (`AutoModEngine`)
 
 ```go
-client.AddHandler(func(s *micup.Session, m *micup.MessageCreate) {
-    if m.Content == "!server" {
-        // Ağ isteği atmadan RAM'den anında çeker
-        guild, err := s.State.Guild(m.GuildID)
-        if err == nil {
-            s.ChannelMessageSend(m.ChannelID, "Sunucu Adı: " + guild.Name)
-        }
-    }
+automod := micup.NewAutoModEngine()
+
+// Yasaklı kelime filtresi
+automod.AddKeywordRule("reklam", []string{"discord.gg/", "t.me/"}, func(s *micup.Session, msg *micup.Message, reason string) {
+    _ = s.ChannelMessageDelete(msg.ChannelID, msg.ID)
+    _, _ = s.ChannelMessageSend(msg.ChannelID, "⚠️ Reklam içerikleri engellendi!")
 })
+
+// Aşırı etiket (mass-mention) engeli
+automod.AddMentionLimitRule("mass_mention", 5, func(s *micup.Session, msg *micup.Message, reason string) {
+    _ = s.ChannelMessageDelete(msg.ChannelID, msg.ID)
+    _, _ = s.ChannelMessageSend(msg.ChannelID, "🚨 Çok fazla etiketleme yapamazsınız!")
+})
+
+automod.Attach(session)
 ```
 
-### 3. Zengin Durum & Aktivite Güncelleme
+### 3. Etkileşimli Butonlar ve Component Router
 
 ```go
-client.AddHandler(func(s *micup.Session, r *micup.Ready) {
-    // Çalıyor, İzliyor, Oynuyor veya Özel Durum belirleyin
-    _ = s.UpdateGameStatus(micup.StatusOnline, "Micup.gg | !yardim")
+compRouter := micup.NewComponentRouter()
+compRouter.Handle("btn_approve", func(s *micup.Session, i *micup.Interaction) {
+    _ = s.RespondText(i, "✅ İşlem onaylandı!")
+})
+client.AddHandler(compRouter.Listener())
+
+client.AddHandler(func(s *micup.Session, m *micup.MessageCreate) {
+    if m.Content == "!onay" {
+        btn := micup.NewSuccessButton("btn_approve", "Onayla").WithEmoji("✅")
+        _, _ = s.ChannelMessageSendComplex(m.ChannelID, &micup.MessageSend{
+            Content:    "İşlemi onaylıyor musunuz?",
+            Components: []micup.Component{micup.NewActionRow(btn)},
+        })
+    }
 })
 ```
 

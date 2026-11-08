@@ -159,3 +159,20 @@ func (c *RESTClient) GuildMemberBan(ctx context.Context, guildID, userID string,
 func (c *RESTClient) GuildMemberUnban(ctx context.Context, guildID, userID string) error {
 	return c.RequestJSON(ctx, "DELETE", fmt.Sprintf("/guilds/%s/bans/%s", guildID, userID), nil, nil)
 }
+
+// Session convenience methods
+
+// GuildMemberKick kicks a member from the guild.
+func (s *Session) GuildMemberKick(guildID, userID string) error {
+	return s.rest.GuildMemberKick(context.Background(), guildID, userID)
+}
+
+// GuildMemberBan bans a member from the guild.
+func (s *Session) GuildMemberBan(guildID, userID string, deleteMessageDays int, reason string) error {
+	return s.rest.GuildMemberBan(context.Background(), guildID, userID, deleteMessageDays, reason)
+}
+
+// GuildMemberUnban unbans a user from the guild.
+func (s *Session) GuildMemberUnban(guildID, userID string) error {
+	return s.rest.GuildMemberUnban(context.Background(), guildID, userID)
+}

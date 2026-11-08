@@ -11,22 +11,6 @@ type GuildBan struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// AuditLog represents guild audit logs.
-type AuditLog struct {
-	Webhooks []*Webhook        `json:"webhooks"`
-	Users    []*User           `json:"users"`
-	Entries  []*AuditLogEntry  `json:"audit_log_entries"`
-}
-
-// AuditLogEntry represents a single audit log record.
-type AuditLogEntry struct {
-	TargetID   string `json:"target_id"`
-	UserID     string `json:"user_id"`
-	ID         string `json:"id"`
-	ActionType int    `json:"action_type"`
-	Reason     string `json:"reason,omitempty"`
-}
-
 // ChannelMessagesBulkDelete deletes multiple messages in a single request (up to 100).
 func (c *RESTClient) ChannelMessagesBulkDelete(ctx context.Context, channelID string, messageIDs []string) error {
 	body := map[string][]string{
@@ -48,16 +32,6 @@ func (c *RESTClient) GuildBans(ctx context.Context, guildID string) ([]*GuildBan
 		return nil, err
 	}
 	return bans, nil
-}
-
-// GuildAuditLogs fetches audit log entries for a guild.
-func (c *RESTClient) GuildAuditLogs(ctx context.Context, guildID string) (*AuditLog, error) {
-	var logs AuditLog
-	err := c.RequestJSON(ctx, "GET", fmt.Sprintf("/guilds/%s/audit-logs", guildID), nil, &logs)
-	if err != nil {
-		return nil, err
-	}
-	return &logs, nil
 }
 
 // GuildPruneCount checks how many inactive members would be removed.
@@ -101,9 +75,4 @@ func (s *Session) ChannelTyping(channelID string) error {
 // GuildBans lists all bans in a guild.
 func (s *Session) GuildBans(guildID string) ([]*GuildBan, error) {
 	return s.rest.GuildBans(context.Background(), guildID)
-}
-
-// GuildAuditLogs fetches audit logs.
-func (s *Session) GuildAuditLogs(guildID string) (*AuditLog, error) {
-	return s.rest.GuildAuditLogs(context.Background(), guildID)
 }

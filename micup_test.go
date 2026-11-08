@@ -2,6 +2,7 @@ package micup
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -465,3 +466,257 @@ func TestWebhookSerialization(t *testing.T) {
 		t.Errorf("unexpected parsed webhook params: %+v", parsed)
 	}
 }
+
+func TestPermissionsBitwiseAndOverwrites(t *testing.T) {
+	// Parse and format
+	permStr := "1048576" // PermissionConnect (1 << 20)
+	permInt := ParsePermissions(permStr)
+	if permInt != PermissionConnect {
+		t.Errorf("expected %d, got %d", PermissionConnect, permInt)
+	}
+	if FormatPermissions(permInt) != permStr {
+		t.Errorf("expected string %s, got %s", permStr, FormatPermissions(permInt))
+	}
+
+	// Bitwise operations
+	base := PermissionSendMessages | PermissionViewChannel
+	if !HasPermission(base, PermissionSendMessages) {
+		t.Errorf("expected base to have SendMessages")
+	}
+	if HasPermission(base, PermissionAdministrator) {
+		t.Errorf("did not expect base to have Administrator")
+	}
+
+	// Administrator override
+	adminPerms := PermissionAdministrator
+	if !HasPermission(adminPerms, PermissionManageGuild) {
+		t.Errorf("Administrator should have all permissions")
+	}
+
+	// ComputeBasePermissions & Overwrites
+	guild := &Guild{
+		ID:      "guild_1",
+		OwnerID: "owner_1",
+		Roles: []*Role{
+			{ID: "guild_1", Permissions: FormatPermissions(PermissionViewChannel)},                               // @everyone
+			{ID: "role_mod", Permissions: FormatPermissions(PermissionSendMessages | PermissionManageMessages)}, // Mod role
+		},
+	}
+
+	member := &Member{
+		User:  &User{ID: "member_1"},
+		Roles: []string{"role_mod"},
+	}
+
+	calculatedBase := ComputeBasePermissions(member, guild)
+	if !HasPermission(calculatedBase, PermissionSendMessages) || !HasPermission(calculatedBase, PermissionViewChannel) {
+		t.Errorf("expected member to have base SendMessages and ViewChannel, got %d", calculatedBase)
+	}
+
+	// Channel overwrites
+	channel := &Channel{
+		ID:      "chan_1",
+		GuildID: "guild_1",
+		PermissionOverwrites: []*PermissionOverwrite{
+			{
+				ID:    "role_mod",
+				Type:  0, // Role
+				Deny:  FormatPermissions(PermissionSendMessages),
+				Allow: "0",
+			},
+			{
+				ID:    "member_1",
+				Type:  1, // Member override
+				Allow: FormatPermissions(PermissionSendMessages),
+				Deny:  "0",
+			},
+		},
+	}
+
+	effective := ComputeOverwrites(calculatedBase, member, channel)
+	if !HasPermission(effective, PermissionSendMessages) {
+		t.Errorf("expected member-specific allow overwrite to restore SendMessages permission")
+	}
+}
+
+func TestAuditLogSerializationAndQuery(t *testing.T) {
+	entry := &AuditLogEntry{
+		ID:         "entry_1",
+		TargetID:   "user_target",
+		UserID:     "user_mod",
+		ActionType: AuditLogActionMemberBanAdd,
+		Reason:     "Spamming invites",
+		Changes: []*AuditLogChange{
+			{
+				Key:      "communication_disabled_until",
+				NewValue: "2026-11-08T12:00:00Z",
+			},
+		},
+		Options: &AuditLogOptionsData{
+			DeleteMemberDays: "1",
+		},
+	}
+
+	logData := &AuditLog{
+		Entries: []*AuditLogEntry{entry},
+		Users: []*User{
+			{ID: "user_mod", Username: "ModeratorBot"},
+		},
+	}
+
+	data, err := json.Marshal(logData)
+	if err != nil {
+		t.Fatalf("failed to marshal audit log: %v", err)
+	}
+
+	var parsed AuditLog
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal audit log: %v", err)
+	}
+
+	if len(parsed.Entries) != 1 || parsed.Entries[0].ActionType != AuditLogActionMemberBanAdd {
+		t.Errorf("unexpected parsed audit log entries: %+v", parsed.Entries)
+	}
+	if parsed.Entries[0].Options.DeleteMemberDays != "1" {
+		t.Errorf("expected DeleteMemberDays to be 1, got %s", parsed.Entries[0].Options.DeleteMemberDays)
+	}
+}
+
+func TestEmojiAndReactionPayloads(t *testing.T) {
+	createParams := &CreateEmojiParams{
+		Name:  "custom_cat",
+		Image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+		Roles: []string{"role_vip"},
+	}
+
+	data, err := json.Marshal(createParams)
+	if err != nil {
+		t.Fatalf("failed to marshal create emoji params: %v", err)
+	}
+
+	var parsed CreateEmojiParams
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal create emoji params: %v", err)
+	}
+
+	if parsed.Name != "custom_cat" || len(parsed.Roles) != 1 {
+		t.Errorf("unexpected parsed emoji params: %+v", parsed)
+	}
+}
+
+func TestScheduledEventModels(t *testing.T) {
+	now := time.Now()
+	endTime := now.Add(2 * time.Hour)
+
+	event := &GuildScheduledEvent{
+		ID:                 "event_1",
+		GuildID:            "guild_1",
+		Name:               "Community Game Night",
+		Description:        "Join us for tournament play!",
+		ScheduledStartTime: now,
+		ScheduledEndTime:   &endTime,
+		PrivacyLevel:       EventPrivacyGuildOnly,
+		Status:             EventStatusScheduled,
+		EntityType:         EventEntityExternal,
+		EntityMetadata: &ScheduledEventEntityMetadata{
+			Location: "https://micup.gg/tournament",
+		},
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("failed to marshal scheduled event: %v", err)
+	}
+
+	var parsed GuildScheduledEvent
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal scheduled event: %v", err)
+	}
+
+	if parsed.Name != "Community Game Night" || parsed.EntityMetadata.Location != "https://micup.gg/tournament" {
+		t.Errorf("unexpected parsed event: %+v", parsed)
+	}
+	if parsed.Status != EventStatusScheduled || parsed.EntityType != EventEntityExternal {
+		t.Errorf("unexpected event status/type: status=%d type=%d", parsed.Status, parsed.EntityType)
+	}
+}
+
+func TestAutoModEngine(t *testing.T) {
+	engine := NewAutoModEngine()
+
+	engine.AddKeywordRule("anti_badword", []string{"badword", "nastyterm"}, nil)
+	_ = engine.AddRegexRule("anti_invite", []string{`(?i)micup\.gg/invite/[a-z0-9]+`}, nil)
+	engine.AddMentionLimitRule("anti_mass_mention", 3, nil)
+
+	// Clean message
+	cleanMsg := &Message{Content: "Hello world!", Mentions: []*User{{ID: "u1"}}}
+	matched, _, _ := engine.CheckMessage(cleanMsg)
+	if matched {
+		t.Errorf("expected clean message not to trigger automod")
+	}
+
+	// Keyword match
+	badMsg := &Message{Content: "Hey check this badword out"}
+	matched, rule, _ := engine.CheckMessage(badMsg)
+	if !matched || rule != "anti_badword" {
+		t.Errorf("expected anti_badword match, got matched=%v rule=%s", matched, rule)
+	}
+
+	// Regex match
+	inviteMsg := &Message{Content: "Join my cool guild: micup.gg/invite/xyz123"}
+	matched, rule, _ = engine.CheckMessage(inviteMsg)
+	if !matched || rule != "anti_invite" {
+		t.Errorf("expected anti_invite match, got matched=%v rule=%s", matched, rule)
+	}
+
+	// Mass mention match
+	spamMsg := &Message{
+		Content: "Ping all",
+		Mentions: []*User{
+			{ID: "u1"}, {ID: "u2"}, {ID: "u3"}, {ID: "u4"},
+		},
+	}
+	matched, rule, _ = engine.CheckMessage(spamMsg)
+	if !matched || rule != "anti_mass_mention" {
+		t.Errorf("expected anti_mass_mention match, got matched=%v rule=%s", matched, rule)
+	}
+}
+
+func TestAudioPlayerVolumeScaling(t *testing.T) {
+	// 2 samples: 1000 and -1000 in little endian 16-bit
+	pcm := make([]byte, 4)
+	valPos := int16(1000)
+	valNeg := int16(-1000)
+	binary.LittleEndian.PutUint16(pcm[0:2], uint16(valPos))
+	binary.LittleEndian.PutUint16(pcm[2:4], uint16(valNeg))
+
+	// Scale 50%
+	scaled50 := ScalePCM16(pcm, 0.5)
+	s1 := int16(binary.LittleEndian.Uint16(scaled50[0:2]))
+	s2 := int16(binary.LittleEndian.Uint16(scaled50[2:4]))
+	if s1 != 500 || s2 != -500 {
+		t.Errorf("expected 500 and -500, got %d and %d", s1, s2)
+	}
+
+	// Scale 0% (silence)
+	scaled0 := ScalePCM16(pcm, 0.0)
+	z1 := int16(binary.LittleEndian.Uint16(scaled0[0:2]))
+	z2 := int16(binary.LittleEndian.Uint16(scaled0[2:4]))
+	if z1 != 0 || z2 != 0 {
+		t.Errorf("expected silence (0), got %d and %d", z1, z2)
+	}
+
+	// Boundary clamping
+	loudPCM := make([]byte, 4)
+	loudPos := int16(20000)
+	loudNeg := int16(-20000)
+	binary.LittleEndian.PutUint16(loudPCM[0:2], uint16(loudPos))
+	binary.LittleEndian.PutUint16(loudPCM[2:4], uint16(loudNeg))
+	clamped := ScalePCM16(loudPCM, 2.0)
+	c1 := int16(binary.LittleEndian.Uint16(clamped[0:2]))
+	c2 := int16(binary.LittleEndian.Uint16(clamped[2:4]))
+	if c1 != 32767 || c2 != -32768 {
+		t.Errorf("expected boundary clamp (32767, -32768), got %d and %d", c1, c2)
+	}
+}
+
