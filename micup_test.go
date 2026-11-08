@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -68,10 +69,10 @@ func TestDiscovery(t *testing.T) {
 func TestEventHandlerRegistry(t *testing.T) {
 	registry := NewEventHandlerRegistry()
 
-	received := false
+	var received atomic.Bool
 	unregister := registry.Add(func(m *MessageCreate) {
 		if m.Content == "ping" {
-			received = true
+			received.Store(true)
 		}
 	})
 
@@ -80,18 +81,18 @@ func TestEventHandlerRegistry(t *testing.T) {
 	})
 
 	time.Sleep(50 * time.Millisecond)
-	if !received {
+	if !received.Load() {
 		t.Error("expected event to be received by handler")
 	}
 
 	// Test unregister
 	unregister()
-	received = false
+	received.Store(false)
 	registry.Dispatch(nil, &MessageCreate{
 		Message: &Message{Content: "ping"},
 	})
 	time.Sleep(50 * time.Millisecond)
-	if received {
+	if received.Load() {
 		t.Error("expected handler to not be called after unregister")
 	}
 }
