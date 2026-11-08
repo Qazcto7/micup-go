@@ -293,3 +293,142 @@ func TestAudioStreamer(t *testing.T) {
 		t.Errorf("expected frame to send, got: %v", err)
 	}
 }
+
+func TestStateCache(t *testing.T) {
+	state := NewState()
+	state.MaxMessageHistory = 2
+
+	// Test Ready
+	state.OnReady(&Ready{
+		GatewayReady: &GatewayReady{
+			User: &User{ID: "bot_1", Username: "TestBot"},
+		},
+	})
+	if state.GetUser() == nil || state.GetUser().Username != "TestBot" {
+		t.Errorf("expected bot user to be cached")
+	}
+
+	// Test Guild Create with channels and members
+	state.OnGuildCreate(&GuildCreate{
+		Guild: &Guild{
+			ID:   "g_1",
+			Name: "Test Server",
+			Channels: []*Channel{
+				{ID: "c_1", Name: "general"},
+			},
+			Roles: []*Role{
+				{ID: "r_1", Name: "Admin"},
+			},
+			Members: []*Member{
+				{User: &User{ID: "u_1", Username: "Alice"}},
+			},
+		},
+	})
+
+	g, err := state.Guild("g_1")
+	if err != nil || g.Name != "Test Server" {
+		t.Errorf("expected guild in state, got %v", err)
+	}
+
+	ch, err := state.Channel("c_1")
+	if err != nil || ch.Name != "general" {
+		t.Errorf("expected channel in state, got %v", err)
+	}
+
+	m, err := state.Member("g_1", "u_1")
+	if err != nil || m.User.Username != "Alice" {
+		t.Errorf("expected member in state, got %v", err)
+	}
+
+	r, err := state.Role("g_1", "r_1")
+	if err != nil || r.Name != "Admin" {
+		t.Errorf("expected role in state, got %v", err)
+	}
+
+	// Test Message Ring Buffer
+	state.OnMessageCreate(&MessageCreate{Message: &Message{ID: "m1", ChannelID: "c_1", Content: "First"}})
+	state.OnMessageCreate(&MessageCreate{Message: &Message{ID: "m2", ChannelID: "c_1", Content: "Second"}})
+	state.OnMessageCreate(&MessageCreate{Message: &Message{ID: "m3", ChannelID: "c_1", Content: "Third"}})
+
+	msgs := state.MessagesList("c_1")
+	if len(msgs) != 2 {
+		t.Errorf("expected max 2 messages in ring buffer, got %d", len(msgs))
+	}
+	if msgs[0].ID != "m2" || msgs[1].ID != "m3" {
+		t.Errorf("expected m2 and m3 in buffer, got %s and %s", msgs[0].ID, msgs[1].ID)
+	}
+
+	// Test Guild Delete
+	state.OnGuildDelete(&GuildDelete{ID: "g_1"})
+	if _, err := state.Guild("g_1"); err == nil {
+		t.Errorf("expected guild to be deleted from state")
+	}
+	if _, err := state.Channel("c_1"); err == nil {
+		t.Errorf("expected channel to be deleted from state on guild delete")
+	}
+}
+
+func TestPresenceHelpers(t *testing.T) {
+	game := ActivityGame("Micup Arena")
+	if game.Type != ActivityTypeGame || game.Name != "Micup Arena" {
+		t.Errorf("unexpected game activity: %+v", game)
+	}
+
+	stream := ActivityStreaming("Live Coding", "https://twitch.tv/example")
+	if stream.Type != ActivityTypeStreaming || stream.URL != "https://twitch.tv/example" {
+		t.Errorf("unexpected streaming activity: %+v", stream)
+	}
+
+	custom := ActivityCustom("Developing bots...")
+	if custom.Type != ActivityTypeCustom || custom.State != "Developing bots..." {
+		t.Errorf("unexpected custom activity: %+v", custom)
+	}
+}
+
+func TestComponentRouter(t *testing.T) {
+	router := NewComponentRouter()
+	var handled atomic.Bool
+
+	router.Handle("btn_test", func(s *Session, i *Interaction) {
+		handled.Store(true)
+	})
+
+	listener := router.Listener()
+	listener(nil, &InteractionCreate{
+		Interaction: &Interaction{
+			ID: "int_1",
+			Data: &InteractionData{
+				CustomID: "btn_test",
+			},
+		},
+	})
+
+	if !handled.Load() {
+		t.Errorf("expected component handler to be invoked")
+	}
+}
+
+func TestWebhookSerialization(t *testing.T) {
+	params := &WebhookExecuteParams{
+		Content:   "Hello from Webhook!",
+		Username:  "Webhooker",
+		AvatarURL: "https://example.com/avatar.png",
+		Embeds: []*Embed{
+			NewEmbed().SetTitle("Test Webhook Embed").Build(),
+		},
+	}
+
+	data, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("failed to marshal webhook params: %v", err)
+	}
+
+	var parsed WebhookExecuteParams
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal webhook params: %v", err)
+	}
+
+	if parsed.Username != "Webhooker" || len(parsed.Embeds) != 1 {
+		t.Errorf("unexpected parsed webhook params: %+v", parsed)
+	}
+}

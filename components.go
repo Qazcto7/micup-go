@@ -73,6 +73,39 @@ func (b *Button) MarshalJSON() ([]byte, error) {
 
 // Helper constructors
 
+// WithDisabled sets the disabled state of the button.
+func (b *Button) WithDisabled(disabled bool) *Button {
+	b.Disabled = disabled
+	return b
+}
+
+// WithEmoji sets a unicode or custom emoji on the button.
+func (b *Button) WithEmoji(emojiName string) *Button {
+	b.Emoji = &Emoji{Name: emojiName}
+	return b
+}
+
+// WithLabel sets or updates the label of the button.
+func (b *Button) WithLabel(label string) *Button {
+	b.Label = label
+	return b
+}
+
+// WithURL sets the external URL for a link button.
+func (b *Button) WithURL(url string) *Button {
+	b.URL = url
+	return b
+}
+
+// NewButton creates a button with custom style, customID and label.
+func NewButton(style int, customID, label string) *Button {
+	return &Button{
+		Style:    style,
+		CustomID: customID,
+		Label:    label,
+	}
+}
+
 // NewPrimaryButton creates a primary styled button.
 func NewPrimaryButton(customID, label string) *Button {
 	return &Button{

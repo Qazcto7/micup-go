@@ -11,6 +11,7 @@ import (
 // Session represents a high-level client session with Micup.
 type Session struct {
 	Token     string
+	State     *State
 	discovery *DiscoveryManager
 	rest      *RESTClient
 	gateway   *GatewayClient
@@ -24,12 +25,20 @@ type SessionOptions struct {
 	TokenPrefix string
 	UserAgent   string
 	HTTPClient  *http.Client
+	DisableState bool
 	ShardID     int
 	ShardCount  int
 }
 
 // Option modifies SessionOptions.
 type Option func(*SessionOptions)
+
+// WithoutState disables the automatic in-memory entity cache.
+func WithoutState() Option {
+	return func(o *SessionOptions) {
+		o.DisableState = true
+	}
+}
 
 // WithBaseURL configures a custom platform base URL (default: "https://micup.gg").
 func WithBaseURL(baseURL string) Option {
@@ -87,6 +96,11 @@ func New(token string, opts ...Option) (*Session, error) {
 		rest:      rest,
 		events:    NewEventHandlerRegistry(),
 		options:   options,
+	}
+
+	if !options.DisableState {
+		s.State = NewState()
+		s.State.BindSession(s)
 	}
 
 	s.gateway = NewGatewayClient(s, token)

@@ -7,6 +7,11 @@ type EmbedBuilder struct {
 	embed *Embed
 }
 
+// NewEmbed creates an empty EmbedBuilder.
+func NewEmbed() *EmbedBuilder {
+	return NewEmbedBuilder()
+}
+
 // NewEmbedBuilder creates an empty EmbedBuilder.
 func NewEmbedBuilder() *EmbedBuilder {
 	return &EmbedBuilder{
